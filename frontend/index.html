@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Product Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light p-4">
+
+  <div class="container">
+    <h1 class="mb-4">🛒 Product Dashboard</h1>
+
+    <!-- Product Table -->
+    <h3>Product List</h3>
+    <table class="table table-bordered table-striped" id="productTable">
+      <thead class="table-dark">
+        <tr>
+          <th>ID</th><th>Name</th><th>Description</th><th>Price</th><th>Image</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Add Product -->
+    <h3 class="mt-5">Add New Product</h3>
+    <div class="row g-3">
+      <div class="col-md-3"><input class="form-control" id="name" placeholder="Name"></div>
+      <div class="col-md-3"><input class="form-control" id="description" placeholder="Description"></div>
+      <div class="col-md-2"><input class="form-control" id="price" placeholder="Price" type="number" step="0.01"></div>
+      <div class="col-md-3"><input class="form-control" id="image_url" placeholder="Image URL"></div>
+      <div class="col-md-1 d-grid"><button class="btn btn-primary" onclick="addProduct()">Add</button></div>
+    </div>
+
+    <!-- Health Check -->
+    <div class="mt-5">
+      <h3>API Health Check</h3>
+      <button class="btn btn-secondary" onclick="checkHealth()">Check Health</button>
+      <span id="healthStatus" class="ms-3 fw-bold"></span>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "http://104.198.249.82/api/products";
+    const HEALTH_URL = "http://104.198.249.82/health";
+    const TOKEN = "mysecrettoken123";
+
+    async function fetchProducts() {
+      const res = await fetch(API_URL, {
+        headers: { "Authorization": `Bearer ${TOKEN}` }
+      });
+      const data = await res.json();
+      const tbody = document.querySelector("#productTable tbody");
+      tbody.innerHTML = "";
+      data.forEach(p => {
+        tbody.innerHTML += `<tr>
+          <td>${p.id}</td><td>${p.name}</td><td>${p.description}</td>
+          <td>$${p.price.toFixed(2)}</td>
+          <td>
+            <a href="${p.image_url}" target="_blank">
+              <img src="${p.image_url}" width="60" onerror="this.src='https://via.placeholder.com/60'">
+            </a>
+          </td>
+        </tr>`;
+      });
+    }
+
+    async function addProduct() {
+      const name = document.getElementById("name").value.trim();
+      const description = document.getElementById("description").value.trim();
+      const price = parseFloat(document.getElementById("price").value);
+      const image_url = document.getElementById("image_url").value.trim();
+
+      if (!name || !description || isNaN(price) || !image_url) {
+        alert("All fields are required and price must be a number.");
+        return;
+      }
+
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ name, description, price, image_url })
+      });
+
+      if (res.ok) {
+        alert("Product added successfully!");
+        document.querySelectorAll("input").forEach(i => i.value = "");
+        fetchProducts();
+      } else {
+        alert("Error adding product.");
+      }
+    }
+
+    async function checkHealth() {
+      const status = document.getElementById("healthStatus");
+      status.innerText = "Checking...";
+      status.style.color = "black";
+      try {
+        const res = await fetch(HEALTH_URL, {
+          headers: { "Authorization": `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        status.innerText = data.status === "ok" ? "Healthy ✅" : "Unhealthy ❌";
+        status.style.color = data.status === "ok" ? "green" : "red";
+      } catch (e) {
+        status.innerText = "Failed ❌";
+        status.style.color = "red";
+      }
+    }
+
+    fetchProducts();
+  </script>
+
+</body>
+</html>
+
