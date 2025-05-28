@@ -24,7 +24,7 @@ spec:
         - name: DB_PASSWORD
           value: "rishab1903"
         - name: DB_HOST
-          value: "34.123.238.57"
+          value: "10.22.112.3"
         - name: DB_PORT
           value: "5432"
         - name: DB_NAME
