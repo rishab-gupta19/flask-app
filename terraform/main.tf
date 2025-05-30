@@ -1,141 +1,98 @@
+variable "project_id" {
+  type        = string
+  description = "GCP Project ID"
+}
+
+variable "region" {
+  type        = string
+  default     = "us-central1"
+}
+
+variable "db_password" {
+  type        = string
+  sensitive   = true
+}
+
 provider "google" {
-  project = "rishab-gupta-cwx-internal"
-  region  = "us-central1"
+  project = var.project_id
+  region  = var.region
 }
 
-provider "kubernetes" {
-  host                   = google_container_cluster.primary.endpoint
-  token                  = data.google_client_config.default.access_token
-  cluster_ca_certificate = base64decode(google_container_cluster.primary.master_auth.0.cluster_ca_certificate)
+module "cloudsql" {
+  source       = "./modules/cloudsql"
+  db_password  = var.db_password
+  project_id   = var.project_id
+  region       = var.region
 }
 
-data "google_client_config" "default" {}
+module "gke" {
+  source              = "./modules/gke"
+  project_id          = var.project_id
+  region              = var.region
+  cloudsql_dep        = module.cloudsql
+  cloudsql_private_ip = module.cloudsql.private_ip
+  db_user             = module.cloudsql.username
+  db_password         = var.db_password
+  db_name             = module.cloudsql.db_name
+  backend_image       = "gcr.io/${var.project_id}/product-backend"
+}
 
-resource "google_sql_database_instance" "product_sql" {
-  name             = "product-sql-test"
-  database_version = "POSTGRES_14"
-  region           = "us-central1"
+resource "google_compute_instance" "frontend_vm" {
+  name         = "frontend-vm"
+  machine_type = "e2-micro"
+  zone         = "us-central1-a"
 
-  settings {
-    tier = "db-f1-micro"
-
-    ip_configuration {
-      ipv4_enabled    = false
-      private_network = "projects/rishab-gupta-cwx-internal/global/networks/default"
+  boot_disk {
+    initialize_params {
+      image = "projects/debian-cloud/global/images/family/debian-11"
     }
   }
-  deletion_protection = false
-}
 
-resource "null_resource" "wait_for_sql_instance" {
-  depends_on = [google_sql_database_instance.product_sql]
-
-  provisioner "local-exec" {
-    command = <<EOT
-      for i in {1..30}; do
-        STATUS=$(gcloud sql instances describe product-sql-test --format='value(state)')
-        echo "Cloud SQL state: $STATUS"
-        if [ "$STATUS" = "RUNNABLE" ]; then exit 0; fi
-        sleep 10
-      done
-      echo "Cloud SQL did not become RUNNABLE in time"
-      exit 1
-    EOT
-  }
-}
-
-resource "google_sql_user" "postgres" {
-  name     = "postgres_test"
-  instance = google_sql_database_instance.product_sql.name
-  password = "rishab1903"
-  depends_on = [null_resource.wait_for_sql_instance]
-}
-
-resource "google_sql_database" "products_db" {
-  name     = "products_test"
-  instance = google_sql_database_instance.product_sql.name
-  depends_on = [null_resource.wait_for_sql_instance]
-}
-
-output "private_ip" {
-  value = google_sql_database_instance.product_sql.ip_address[0].ip_address
-}
-
-output "connection_name" {
-  value = google_sql_database_instance.product_sql.connection_name
-}
-
-resource "google_container_cluster" "primary" {
-  depends_on = [
-    google_sql_user.postgres,
-    google_sql_database.products_db
-  ]
-
-  name     = "product1-cluster"
-  location = "us-central1-a"
-  initial_node_count = 2
-
-  node_config {
-    machine_type = "e2-medium"
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
-    ]
+  network_interface {
+    network       = "default"
+    access_config {}
   }
 
-  network    = "default"
-  subnetwork = "default"
-}
+  metadata_startup_script = <<-EOT
+    #!/bin/bash
+    apt-get update
+    apt-get install -y docker.io git curl
 
-data "template_file" "deployment_yaml" {
-  template = file("${path.module}/deployment.yaml.tpl")
-  vars = {
-    DB_USER     = "postgres_test"
-    DB_PASSWORD = "rishab1903"
-    DB_HOST     = google_sql_database_instance.product_sql.ip_address[0].ip_address
-    DB_PORT     = "5432"
-    DB_NAME     = "products_test"
-    API_TOKEN   = "mysecrettoken123"
-  }
-}
+    # Pull frontend image from GCR
+    docker pull gcr.io/${var.project_id}/product-frontend:latest
 
-resource "null_resource" "apply_k8s" {
-  depends_on = [google_container_cluster.primary]
+    # Create default.conf dynamically from template
+    mkdir -p /opt/frontend/conf
+    cat <<EOF > /opt/frontend/conf/default.conf
+    server {
+      listen 80;
 
-  provisioner "local-exec" {
-    command = <<EOT
-      echo '${data.template_file.deployment_yaml.rendered}' > deployment-final.yaml
-      kubectl apply -f deployment-final.yaml
-    EOT
-  }
-}
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files \$uri \$uri/ /index.html;
+      }
 
-resource "null_resource" "apply_service" {
-  depends_on = [null_resource.apply_k8s]
+      location /api/ {
+        proxy_pass http://${module.gke.backend_internal_ip}/api/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+      }
 
-  provisioner "local-exec" {
-    command = <<EOT
-      kubectl apply -f ${path.module}/backend-service.yaml
-    EOT
-  }
-}
+      location /health {
+        proxy_pass http://${module.gke.backend_internal_ip}/health;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+      }
+    }
+EOF
 
-# Wait and output the internal LB IP from the service
-data "external" "get_internal_ip" {
-  depends_on = [null_resource.apply_service]
-
-  program = ["bash", "-c", <<EOT
-    for i in {1..20}; do
-      ip=$(kubectl get svc product-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-      if [[ ! -z "$ip" ]]; then echo "{\"ip\": \"$ip\"}"; exit 0; fi
-      sleep 5
-    done
-    echo "{\"ip\": \"\"}"
-    exit 1
+    # Run container with mounted config
+    docker run -d --name frontend-nginx \
+      -p 80:80 \
+      -v /opt/frontend/conf/default.conf:/etc/nginx/conf.d/default.conf:ro \
+      gcr.io/${var.project_id}/product-frontend:latest
   EOT
-  ]
-}
 
-output "internal_lb_ip" {
-  value = data.external.get_internal_ip.result["ip"]
+  depends_on = [module.gke]
 }
-
