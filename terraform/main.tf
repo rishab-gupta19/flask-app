@@ -13,6 +13,11 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "zone" {
+  description = "The GCP zone for the GKE cluster nodes and VM."
+  type        = string
+}
+
 provider "google" {
   project = var.project_id
   region  = var.region
@@ -38,61 +43,58 @@ module "gke" {
 }
 
 resource "google_compute_instance" "frontend_vm" {
-  name         = "frontend-vm"
-  machine_type = "e2-micro"
-  zone         = "us-central1-a"
+  name         = "frontend-vm-${random_id.suffix.hex}"
+  machine_type = "e2-medium"
+  zone         = var.zone
 
+  # Boot disk configuration
   boot_disk {
     initialize_params {
-      image = "projects/debian-cloud/global/images/family/debian-11"
+      image = "debian-cloud/debian-11" # Using a stable Debian image
     }
   }
 
+  # Network interface configuration
   network_interface {
-    network       = "default"
-    access_config {}
+    network = "default" 
+
+    # Assign an external IP address for public access
+    access_config {
+    }
   }
 
-  metadata_startup_script = <<-EOT
-    #!/bin/bash
-    apt-get update
-    apt-get install -y docker.io git curl
+  # Allow HTTP traffic to the VM instance
+  tags = ["http-server"]
 
-    # Pull frontend image from GCR
-    docker pull gcr.io/${var.project_id}/product-frontend:latest
+  # Metadata startup script to install Docker and run the container
+  # This script will execute automatically when the VM starts.
+  metadata_startup_script = templatefile("${path.module}/startup_script.sh", {
+    docker_image_name = "gcr.io/rishab-gupta-cwx-internal/product-frontend"
+    # Dynamically fetch the internal IP from the GKE module's output
+    gke_backend_ip    = module.gke.backend_internal_ip
+  })
 
-    # Create default.conf dynamically from template
-    mkdir -p /opt/frontend/conf
-    cat <<EOF > /opt/frontend/conf/default.conf
-    server {
-      listen 80;
+  # Service account with necessary permissions for pulling Docker images from GCR
+  # and other cloud operations if needed.
+  service_account {
+    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
+}
 
-      location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files \$uri \$uri/ /index.html;
-      }
+resource "google_compute_firewall" "allow_http" {
+  name    = "allow-http-frontend-vm"
+  network = "default" # Apply to the default VPC network
 
-      location /api/ {
-        proxy_pass http://${module.gke.backend_internal_ip}/api/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-      }
+  allow {
+    protocol = "tcp"
+    ports    = ["80"] # Allow traffic on port 80
+  }
 
-      location /health {
-        proxy_pass http://${module.gke.backend_internal_ip}/health;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-      }
-    }
-EOF
+  # Apply this rule to instances with the "http-server" tag
+  target_tags = ["http-server"]
+  source_ranges = ["0.0.0.0/0"]
+}
 
-    # Run container with mounted config
-    docker run -d --name frontend-nginx \
-      -p 80:80 \
-      -v /opt/frontend/conf/default.conf:/etc/nginx/conf.d/default.conf:ro \
-      gcr.io/${var.project_id}/product-frontend:latest
-  EOT
-
-  depends_on = [module.gke]
+resource "random_id" "suffix" {
+  byte_length = 4
 }
