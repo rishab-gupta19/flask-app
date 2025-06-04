@@ -42,6 +42,13 @@ module "gke" {
   backend_image       = "gcr.io/${var.project_id}/product-backend"
 }
 
+resource "google_compute_address" "frontend_static_ip" {
+  name         = "frontend-vm-static-ip-${random_id.suffix.hex}"
+  project      = var.project_id
+  region       = var.region # Static external IPs are regional resources
+  address_type = "EXTERNAL"   # Explicitly define as external
+}
+
 resource "google_compute_instance" "frontend_vm" {
   name         = "frontend-vm-${random_id.suffix.hex}"
   machine_type = "e2-medium"
@@ -58,12 +65,11 @@ resource "google_compute_instance" "frontend_vm" {
   network_interface {
     network = "default" 
 
-    # Assign an external IP address for public access
     access_config {
+	nat_ip = google_compute_address.frontend_static_ip.address
     }
   }
 
-  # Allow HTTP traffic to the VM instance
   tags = ["http-server"]
 
   # Metadata startup script to install Docker and run the container
@@ -75,7 +81,6 @@ resource "google_compute_instance" "frontend_vm" {
   })
 
   # Service account with necessary permissions for pulling Docker images from GCR
-  # and other cloud operations if needed.
   service_account {
     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
   }
@@ -83,8 +88,8 @@ resource "google_compute_instance" "frontend_vm" {
 
 resource "google_compute_firewall" "allow_http" {
   name    = "allow-http-frontend-vm"
-  network = "default" # Apply to the default VPC network
-
+  network = "default"
+ 
   allow {
     protocol = "tcp"
     ports    = ["80"] # Allow traffic on port 80

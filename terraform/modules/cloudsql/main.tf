@@ -1,4 +1,4 @@
-variable "db_name" {
+/*variable "db_name" {
   type        = string
   default     = "products_test"
 }
@@ -19,7 +19,7 @@ variable "project_id" {
 variable "region" {
   type    = string
   default = "us-central1"
-}
+}*/
 
 resource "google_sql_database_instance" "product_sql" {
   name             = "product-sql-test"
@@ -38,7 +38,7 @@ resource "google_sql_database_instance" "product_sql" {
   deletion_protection = false
 }
 
-resource "null_resource" "wait_for_sql_instance" {
+/*resource "null_resource" "wait_for_sql_instance" {
   depends_on = [google_sql_database_instance.product_sql]
 
   provisioner "local-exec" {
@@ -53,24 +53,24 @@ resource "null_resource" "wait_for_sql_instance" {
       exit 1
     EOT
   }
-}
+}*/
 
 resource "google_sql_database" "products_db" {
   name     = var.db_name
   instance = google_sql_database_instance.product_sql.name
-
-  depends_on = [null_resource.wait_for_sql_instance]
+  depends_on = [google_sql_database_instance.product_sql]
+  //depends_on = [null_resource.wait_for_sql_instance]
 }
 
 resource "google_sql_user" "postgres" {
   name     = var.db_user
   password = var.db_password
   instance = google_sql_database_instance.product_sql.name
-
-  depends_on = [null_resource.wait_for_sql_instance]
+  depends_on = [google_sql_database_instance.product_sql]
+  //depends_on = [null_resource.wait_for_sql_instance]
 }
 
-output "private_ip" {
+/*output "private_ip" {
   value = google_sql_database_instance.product_sql.ip_address[0].ip_address
 }
 
@@ -84,5 +84,4 @@ output "username" {
 
 output "instance_name" {
   value = google_sql_database_instance.product_sql.name
-}
-
+}*/
