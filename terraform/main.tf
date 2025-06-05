@@ -23,6 +23,26 @@ provider "google" {
   region  = var.region
 }
 
+provider "random" {}
+
+# --- Random Password Generation ---
+# Generates a random, strong password for the database
+resource "random_password" "db_password_generated" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()_+-=" # Define allowed special characters if needed
+  upper            = true
+  lower            = true
+  numeric          = true
+  min_upper        = 4
+  min_lower        = 4
+  min_numeric      = 4
+  min_special      = 4
+  keepers = {
+    secret_id_keeper = google_secret_manager_secret.db_password.secret_id
+  }
+}
+
 resource "google_secret_manager_secret" "db_password" {
   secret_id = "cloudsql-db-password"
   project   = var.project_id
@@ -36,23 +56,12 @@ resource "google_secret_manager_secret" "db_password" {
   }
 }
 
-# Add the first version of the secret
-# IMPORTANT: Replace "YOUR_CLOUD_SQL_DB_PASSWORD" with your actual strong password.
-# Avoid hardcoding sensitive values directly in production;
-# consider fetching from a secure CI/CD variable or an interactive prompt.
 resource "google_secret_manager_secret_version" "db_password_version" {
   secret      = google_secret_manager_secret.db_password.id
-  secret_data = var.db_password 
+  secret_data = random_password.db_password_generated.result 
 }
-
-# --- Data Source: Retrieve DB Password from Secret Manager for Cloud SQL ---
-# This fetches the *value* of the secret from Secret Manager.
-# We do this here in the root so we can pass the value to the cloudsql module.
 data "google_secret_manager_secret_version" "db_password_cloudsql_fetch" {
   secret = google_secret_manager_secret.db_password.secret_id
-  # You can specify a version number here if you need a specific one,
-  # otherwise "latest" is the default.
-  # version = "latest"
 }
 
 
