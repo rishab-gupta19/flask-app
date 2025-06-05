@@ -10,6 +10,8 @@ variable "db_user" {
 
 variable "db_password" {
   type        = string
+  description = "fetched from secret manager" 
+  sensitive = true
 }
 
 variable "project_id" {
