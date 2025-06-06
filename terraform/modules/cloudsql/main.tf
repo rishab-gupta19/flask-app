@@ -21,6 +21,40 @@ variable "region" {
   default = "us-central1"
 }*/
 
+resource "random_password" "db_password_generated" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()_+-="
+  upper            = true
+  lower            = true
+  numeric          = true
+  min_upper        = 4
+  min_lower        = 4
+  min_numeric      = 4
+  min_special      = 4
+  keepers = {
+    secret_id_keeper = google_secret_manager_secret.db_password.secret_id
+  }
+}
+
+resource "google_secret_manager_secret" "db_password" {
+  secret_id = "cloudsql-db-password"
+  project   = var.project_id
+
+  replication {
+    auto {}
+  }
+
+  labels = {
+    env = "dev"
+  }
+}
+
+resource "google_secret_manager_secret_version" "db_password_version" {
+  secret      = google_secret_manager_secret.db_password.id
+  secret_data_wo = random_password.db_password_generated.result 
+}
+
 resource "google_sql_database_instance" "product_sql" {
   name             = "product-sql-test"
   project          = var.project_id
@@ -64,7 +98,9 @@ resource "google_sql_database" "products_db" {
 
 resource "google_sql_user" "postgres" {
   name     = var.db_user
-  password = var.db_password
+  password_wo = random_password.db_password_generated.result
+  //password = data.google_secret_manager_secret_version.db_password_cloudsql_fetch.secret_data
+  //password = var.db_password
   instance = google_sql_database_instance.product_sql.name
   depends_on = [google_sql_database_instance.product_sql]
   //depends_on = [null_resource.wait_for_sql_instance]

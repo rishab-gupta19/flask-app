@@ -8,4 +8,4 @@ variable "db_password" {
 }
 variable "db_name" {}
 variable "backend_image" {}
-
+variable "zone" {}
