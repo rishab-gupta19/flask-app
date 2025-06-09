@@ -15,6 +15,7 @@ data "google_secret_manager_secret_version" "db_password_cloudsql_fetch" {
   secret = var.db_password 
   version = "latest"
   project = var.project_id
+  depends_on = [var.cloudsql_secret_version_dep]
 }
 resource "kubernetes_secret" "cloudsql_credentials" {
   metadata {

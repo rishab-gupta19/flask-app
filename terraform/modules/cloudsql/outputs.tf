@@ -24,3 +24,8 @@ output "db_password_secret_value" {
   value       = random_password.db_password_generated.result
   sensitive   = true
 }
+
+output "db_password_secret_version_resource" {
+  description = "Reference to the Cloud SQL database password secret version resource."
+  value       = google_secret_manager_secret_version.db_password_version
+}

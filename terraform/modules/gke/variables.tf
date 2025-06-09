@@ -9,3 +9,6 @@ variable "db_password" {
 variable "db_name" {}
 variable "backend_image" {}
 variable "zone" {}
+variable "cloudsql_secret_version_dep" {
+  type        = any
+}

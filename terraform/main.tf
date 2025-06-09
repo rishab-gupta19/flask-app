@@ -86,6 +86,7 @@ module "gke" {
   region              = var.region
   cloudsql_dep        = module.cloudsql
   cloudsql_private_ip = module.cloudsql.private_ip
+  cloudsql_secret_version_dep = module.cloudsql.db_password_secret_version_resource
   db_user             = module.cloudsql.username
   db_password         = module.cloudsql.db_password_secret_id
   db_name             = module.cloudsql.db_name
