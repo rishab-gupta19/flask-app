@@ -16,17 +16,40 @@ This project contains a full-stack application deployed on Google Cloud Platform
 ## Folder Structure
 
 ```
-project-root/
-├── backend/
+├── backend
 │   ├── app.py
-│   ├── Dockerfile
-│   ├── requirements.txt
 │   ├── backend-deployment.yaml
 │   ├── backend-service.yaml
-│   └── .gitignore
-├── frontend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── venv
+│       ├── bin
+│       ├── include
+│       ├── lib
+│       ├── lib64 -> lib
+│       └── pyvenv.cfg
+├── Dockerfile
+├── frontend
+│   ├── docker-entrypoint.sh
+│   ├── Dockerfile
 │   ├── index.html
-│   └── Dockerfile
+│   └── nginx
+│       └── default.conf.template
+├── nginx
+│   └── default.conf
+├── README.md
+└── terraform
+    ├── backend.tf
+    ├── default.conf
+    ├── main.tf
+    ├── modules
+    │   ├── cloudsql
+    │   └── gke
+    ├── outputs.tf
+    ├── startup_script.sh
+    ├── terraform.tfvars
+    └── variables.tf
+
 ```
 
 ## Step 1: Clone the Repository
