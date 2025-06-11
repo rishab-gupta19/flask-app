@@ -40,7 +40,8 @@ resource "google_container_cluster" "primary" {
   initial_node_count  = 2
   deletion_protection = false
 
-
+  network    = var.vpc_network
+  subnetwork = var.vpc_subnetwork
   node_config {
     machine_type = "e2-medium"
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]

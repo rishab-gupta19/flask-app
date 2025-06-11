@@ -12,3 +12,11 @@ variable "zone" {}
 variable "cloudsql_secret_version_dep" {
   type        = any
 }
+variable "vpc_network" {
+  type        = string
+  description = "The self_link of the VPC network for the GKE cluster."
+}
+variable "vpc_subnetwork" {
+  type        = string
+  description = "The self_link of the subnetwork for the GKE cluster."
+}

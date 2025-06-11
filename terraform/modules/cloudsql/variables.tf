@@ -16,3 +16,8 @@ variable "region" {
   type    = string
   default = "us-central1"
 }
+
+variable "vpc_network_link" {
+  type        = string
+  description = "The self_link of the VPC network for Cloud SQL private IP."
+}

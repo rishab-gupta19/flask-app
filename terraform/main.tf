@@ -1,76 +1,39 @@
-# variable "project_id" {
-#   type        = string
-#   description = "GCP Project ID"
-# }
-
-# variable "region" {
-#   type        = string
-#   default     = "us-central1"
-# }
-
-# variable "zone" {
-#   description = "The GCP zone for the GKE cluster nodes and VM."
-#   type        = string
-# }
-
-# provider "google" {
-#   project = var.project_id
-#   region  = var.region
-# }
-
-# variable "db_name" {
-#   type        = string
-#   default     = "product-sql-test"
-#   description = "Name of the Cloud SQL database."
-# }
-
-# variable "db_user" {
-#   type        = string
-#   default     = "postgres_test"
-#   description = "Username for the Cloud SQL database."
-# }
-provider "random" {
+resource "google_compute_network" "product_vpc" {
+  name                    = "product-vpc-${random_id.suffix.hex}"
+  project                 = var.project_id
+  auto_create_subnetworks = false
+  routing_mode            = "REGIONAL" 
 }
 
-# # --- Random Password Generation ---
-# # Generates a random, strong password for the database
-# resource "random_password" "db_password_generated" {
-#   length           = 32
-#   special          = true
-#   override_special = "!#$%&*()_+-=" # Define allowed special characters if needed
-#   upper            = true
-#   lower            = true
-#   numeric          = true
-#   min_upper        = 4
-#   min_lower        = 4
-#   min_numeric      = 4
-#   min_special      = 4
-#   keepers = {
-#     secret_id_keeper = google_secret_manager_secret.db_password.secret_id
-#   }
-# }
+# --- Custom Subnetwork within the VPC ---
+resource "google_compute_subnetwork" "product_subnet" {
+  name          = "product-subnet-${random_id.suffix.hex}"
+  ip_cidr_range = "10.10.0.0/24"
+  region        = var.region
+  network       = google_compute_network.product_vpc.id
+  project       = var.project_id
+  private_ip_google_access = true
+}
 
-# resource "google_secret_manager_secret" "db_password" {
-#   secret_id = "cloudsql-db-password"
-#   project   = var.project_id
+resource "google_compute_global_address" "private_service_access_ip_range" {
+  name          = "google-managed-services-ip-range-${random_id.suffix.hex}"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 20
+  network       = google_compute_network.product_vpc.id
+  project       = var.project_id
+}
 
-#   replication {
-#     auto {}
-#   }
 
-#   labels = {
-#     env = "dev"
-#   }
-# }
-
-# resource "google_secret_manager_secret_version" "db_password_version" {
-#   secret      = google_secret_manager_secret.db_password.id
-#   secret_data = random_password.db_password_generated.result 
-# }
-# data "google_secret_manager_secret_version" "db_password_cloudsql_fetch" {
-#   secret = google_secret_manager_secret.db_password.secret_id
-# }
-
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.product_vpc.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_service_access_ip_range.name]
+  depends_on = [
+    google_compute_network.product_vpc,
+    google_compute_global_address.private_service_access_ip_range
+  ]
+}
 
 module "cloudsql" {
   source       = "./modules/cloudsql"
@@ -78,6 +41,8 @@ module "cloudsql" {
   region       = var.region
   db_name    = var.db_name
   db_user    = var.db_user
+  vpc_network_link = google_compute_network.product_vpc.self_link
+  depends_on = [google_service_networking_connection.private_vpc_connection]
 }
 
 module "gke" {
@@ -92,12 +57,14 @@ module "gke" {
   db_name             = module.cloudsql.db_name
   backend_image       = "gcr.io/${var.project_id}/product-backend"
   zone                = var.zone
+  vpc_network           = google_compute_network.product_vpc.self_link
+  vpc_subnetwork        = google_compute_subnetwork.product_subnet.self_link
 }
 
 resource "google_compute_address" "frontend_static_ip" {
   name         = "frontend-vm-static-ip-${random_id.suffix.hex}"
   project      = var.project_id
-  region       = var.region # Static external IPs are regional resources
+  region       = var.region
   address_type = "EXTERNAL" 
 }
 
@@ -114,7 +81,8 @@ resource "google_compute_instance" "frontend_vm" {
   }
 
   network_interface {
-    network = "default" 
+    network    = google_compute_network.product_vpc.self_link
+    subnetwork = google_compute_subnetwork.product_subnet.self_link
 
     access_config {
 	    nat_ip = google_compute_address.frontend_static_ip.address
@@ -135,16 +103,19 @@ resource "google_compute_instance" "frontend_vm" {
 
 resource "google_compute_firewall" "allow_http" {
   name    = "allow-http-frontend-vm"
-  network = "default"
+  network = google_compute_network.product_vpc.name
  
   allow {
     protocol = "tcp"
-    ports    = ["80"] # Allow traffic on port 80
+    ports    = ["80"]
   }
 
   # Apply this rule to instances with the "http-server" tag
   target_tags = ["http-server"]
-  source_ranges = ["0.0.0.0/0"]
+  source_ranges = ["0.0.0.0/0"] # Allow traffic on port 80
+  depends_on = [
+    google_compute_network.product_vpc
+  ]
 }
 
 resource "random_id" "suffix" {
