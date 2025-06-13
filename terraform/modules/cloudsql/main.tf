@@ -72,11 +72,6 @@ resource "google_sql_database" "products_db" {
   instance = google_sql_database_instance.product_sql.name
   depends_on = [google_sql_database_instance.product_sql]
   //depends_on = [null_resource.wait_for_sql_instance]
-  timeouts {
-    create = "15m"
-    update = "15m"
-    delete = "15m"
-  }
 }
 
 resource "google_sql_user" "postgres" {
@@ -85,9 +80,4 @@ resource "google_sql_user" "postgres" {
   instance = google_sql_database_instance.product_sql.name
   depends_on = [google_sql_database_instance.product_sql]
   //depends_on = [null_resource.wait_for_sql_instance]
-  timeouts {
-    create = "15m"
-    update = "15m"
-    delete = "15m"
-  }
 }
