@@ -28,6 +28,7 @@ jobs:
         run: gcloud auth configure-docker gcr.io --quiet
 
       - name: Build and Push Docker Image to GCR
+        working-directory: frontend
         run: |
           docker build -t gcr.io/rishab-gupta-cwx-internal/product-frontend:latest .
           docker push gcr.io/rishab-gupta-cwx-internal/product-frontend:latest
