@@ -1,4 +1,5 @@
 FROM nginx:alpine
+
 RUN apk add --no-cache gettext
 
 COPY nginx/default.conf.template /etc/nginx/conf.d/default.conf.template
