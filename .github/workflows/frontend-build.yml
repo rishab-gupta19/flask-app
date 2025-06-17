@@ -23,9 +23,15 @@ jobs:
         token_format: 'access_token'
         workload_identity_provider: 'projects/332413712515/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
         service_account: 'github-actions-sa@rishab-gupta-cwx-internal.iam.gserviceaccount.com'
+   
+    - name: Clear Docker config
+      run: rm -rf ~/.docker
 
     - name: Configure Docker for GCR
-      run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+      run: gcloud auth configure-docker gcr.io --quiet
+
+    - name: Show Docker config
+        run: cat ~/.docker/config.json
 
     - name: Build and Push Docker Image
       run: |
