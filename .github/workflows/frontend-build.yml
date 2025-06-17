@@ -31,7 +31,7 @@ jobs:
       run: gcloud auth configure-docker gcr.io --quiet
 
     - name: Show Docker config
-        run: cat ~/.docker/config.json
+      run: cat ~/.docker/config.json
 
     - name: Build and Push Docker Image
       run: |
