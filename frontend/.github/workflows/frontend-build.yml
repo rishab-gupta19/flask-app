@@ -25,7 +25,7 @@ jobs:
           service_account: 'github-actions-sa@rishab-gupta-cwx-internal.iam.gserviceaccount.com'
 
       - name: Configure Docker to use gcloud credentials
-        run: gcloud auth configure-docker --quiet
+        run: gcloud auth configure-docker gcr.io --quiet
 
       - name: Build and Push Docker Image to GCR
         run: |
