@@ -1,4 +1,4 @@
-name: Build and Push Frontend Image
+name: Build and Push Frontend to GCR
 
 on:
   push:
@@ -7,27 +7,28 @@ on:
       - 'frontend/**'
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Authenticate to Google Cloud (OIDC)
-      uses: google-github-actions/auth@v2
-      with:
-        token_format: 'access_token'
-        workload_identity_provider: 'projects/332413712515/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-        service_account: 'github-actions-sa@rishab-gupta-cwx-internal.iam.gserviceaccount.com'
+      - name: Authenticate to Google Cloud using Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: 'projects/332413712515/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-sa@rishab-gupta-cwx-internal.iam.gserviceaccount.com'
 
-    - name: Configure Docker for GCR
-      run: gcloud auth configure-docker --quiet
+      - name: Configure Docker to use gcloud credentials
+        run: gcloud auth configure-docker --quiet
 
-    - name: Build and Push Docker Image
-      run: |
-        docker build -t gcr.io/rishab-gupta-cwx-internal/product-frontend:latest ./frontend
-        docker push gcr.io/rishab-gupta-cwx-internal/product-frontend:latest
+      - name: Build and Push Docker Image to GCR
+        run: |
+          docker build -t gcr.io/rishab-gupta-cwx-internal/product-frontend:latest .
+          docker push gcr.io/rishab-gupta-cwx-internal/product-frontend:latest
+
