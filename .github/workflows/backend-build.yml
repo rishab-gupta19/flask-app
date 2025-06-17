@@ -1,0 +1,39 @@
+name: Build and Push Frontend Image
+
+on:
+  push:
+    branches: [branch_2]
+    paths:
+      - 'backend/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        token_format: 'access_token'
+        workload_identity_provider: 'projects/332413712515/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+        service_account: 'github-actions-sa@rishab-gupta-cwx-internal.iam.gserviceaccount.com'
+   
+    - name: Clear Docker config
+      run: rm -rf ~/.docker
+
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker gcr.io --quiet
+
+    - name: Show Docker config
+      run: cat ~/.docker/config.json
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t gcr.io/rishab-gupta-cwx-internal/product-backend:latest ./backend
+        docker push gcr.io/rishab-gupta-cwx-internal/product-backend:latest
