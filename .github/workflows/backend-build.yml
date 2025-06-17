@@ -36,7 +36,7 @@ jobs:
     - name: Build and Push Docker Image
       run: |
         SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-        IMAGE_NAME=gcr.io/rishab-gupta-cwx-internal/product-frontend
+        IMAGE_NAME=gcr.io/rishab-gupta-cwx-internal/product-backend
 
         docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:$SHORT_SHA ./frontend
         docker push $IMAGE_NAME:latest
